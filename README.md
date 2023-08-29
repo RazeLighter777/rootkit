@@ -1,9 +1,6 @@
 # Rootkit
 Rootkit for offensive cyber tool capstone AY24. Based on ![this rootkit](https://github.com/reveng007/reveng_rtkit)
 
-# Rootkit
-Rootkit for offensive cyber tool capstone AY24. Based on ![this rootkit](https://github.com/reveng007/reveng_rtkit)
-
 # Instructions
 Make sure you are on linux with sudo privleges. Kernel headers must be installed in /usr/lib/.
 
