@@ -1,0 +1,35 @@
+# Ignore compiled binaries and object files
+*.o
+*.ko
+*.mod
+*.cmd
+*.symvers
+*.order
+*.jpeg
+# Ignore user build artifacts
+/user_src/client_usermode
+
+# Ignore kernel build artifacts
+/kernel_src/reveng_rtkit.mod
+/kernel_src/.reveng_rtkit.ko.cmd
+/kernel_src/modules.order
+/kernel_src/.Module.symvers.cmd
+/kernel_src/reveng_rtkit.mod.o
+/kernel_src/.reveng_rtkit.mod.cmd
+/kernel_src/.reveng_rtkit.mod.o.cmd
+/kernel_src/.reveng_rtkit.o.cmd
+/kernel_src/reveng_rtkit.ko
+/kernel_src/Module.symvers
+/kernel_src/reveng_rtkit.o
+/kernel_src/reveng_rtkit.c
+/kernel_src/.modules.order.cmd
+/kernel_src/reveng_rtkit.mod.c
+
+# Ignore images
+/img/*.png
+/img/*.jpeg
+
+# Ignore metadata and generated files
+.DS_Store
+*.log
+

@@ -41,11 +41,6 @@ void reset()
 
 void cmd(void)
 {
-	printf("\n\n[+] Created by ");
-	yellow();
-	printf("@reveng007(Soumyanil)\n\n");
-	reset();
-
 	green();
 	printf("\n|+++++++++++++++++++ Available commands ++++++++++++++++++|\n\n");
 	
@@ -117,22 +112,7 @@ int main()
 	//ioctl(fd, WR_VALUE, (int32_t*) &number);
 	ioctl(fd, WR_VALUE, (char*) str);
 
-	/*
-        ioctl(fd, RD_VALUE, (int32_t*) &value);
-        printf("Value is %d\n", value);
-        */
-        ioctl(fd, RD_VALUE, (char*) str1);
-	printf("[*] Reading Value from Character Device file: %s", str1);
-	
-	//printf("[+] Value present in Character Device file: ");
-
-	yellow();
-	printf("%s\n", str);
-	reset();
-
-	getchar();
 	printf("[+] Character Device file closed\n");
 	close(fd);
-
 }
 

